@@ -4,6 +4,7 @@ import org.dom4j.DocumentException;
 import org.jgrapht.Graph;
 import xmu.mocom.coreRouting.CoreEdge;
 import xmu.mocom.coreRouting.CoreNode;
+import xmu.mocom.dijkstra.Dijkstra;
 import xmu.mocom.experiment.LoadMap;
 import xmu.mocom.roadNet.Path;
 import xmu.mocom.roadNet.PathSegment;
@@ -49,14 +50,14 @@ public class AStar {
     public void findNextRoadNodes
     (Graph<RoadNode, RoadSegmentEdge> graph, RoadNode start,RoadNode target,ClockSimulator clock){
         for(RoadSegmentEdge edge:start.getAllNextEdge(graph)){  //对于当前节点连接的所有边
-            if(graph.getEdgeSource(edge).getOsmId()==start.getOsmId()){  //选择以当前节点为起点的边
-
-                graph.getEdgeTarget(edge).getDijkstraNode().setDistance(
-                        graph.getEdgeSource(edge).getDijkstraNode().getDistance()+edge.getDistanceList().get(clock.getHour())
+            if(graph.getEdgeSource(edge).getOsmId().equals(start.getOsmId())){  //选择以当前节点为起点的边
+                RoadNode edgeTarget=graph.getEdgeTarget(edge);//当前边的终点
+                edgeTarget.getDijkstraNode().setDistance(
+                        start.getDijkstraNode().getDistance()+edge.getDistanceList().get(clock.getHour())
                 );
-                graph.getEdgeTarget(edge).getDijkstraNode().setParentNode(start);//保存父节点信息
-                AstarEstimate(graph,target,graph.getEdgeTarget(edge));
-                nextRoadNodes.add(graph.getEdgeTarget(edge));
+                edgeTarget.getDijkstraNode().setParentNode(start);//保存父节点信息
+                AstarEstimate(target,edgeTarget);
+                nextRoadNodes.add(edgeTarget);
             }
         }
         Collections.sort(nextRoadNodes, new Comparator<RoadNode>() {
@@ -83,8 +84,8 @@ public class AStar {
      * @return void
      */
     public void AstarEstimate
-            (Graph<RoadNode, RoadSegmentEdge> graph,RoadNode target,RoadNode currentNode){
-        RoadNode targetCore=new Cluster().findNearCore(target.getOsmId(),graph);  //找到目的地所属core节点
+            (RoadNode target,RoadNode currentNode){
+        RoadNode targetCore=target.getBelongTo();  //找到目的地所属core节点
 
         currentNode.getDijkstraNode().setEstimateH(
                 (long)(MillerCoordinate.distance(currentNode,targetCore)/speed)
@@ -138,8 +139,7 @@ public class AStar {
         }
         if(newStart.isCore()){
             System.out.println("找到core节点");
-            RoadNode targetCore=new Cluster().findNearCore(target.getOsmId(),graph);
-            System.out.println("目标附近core节点："+targetCore.isCore()+"  "+targetCore.getLon()+","+targetCore.getLat());
+            RoadNode targetCore=target.getBelongTo();
             findCorePath(newStart.getCoreNode(),targetCore.getCoreNode(),clock);
         }
         else{
@@ -189,12 +189,12 @@ public class AStar {
         try {
             fw=new FileWriter("experimentData/testPath.txt",true);
             Path path=coreEdge.getTimeDependentPathList().get(clock.getHour());
-            while (path!=null){
+            while (path.isEmpty()){
                 PathSegment pathSegment=path.pollPathSegment();
                 RoadNode roadNode=pathSegment.getEndNode();
                 fw.write(roadNode.getOsmId()+":"+roadNode.getLon()+":"+roadNode.getLat()+"\n");
             }
-
+            clock.addmsec(path.getDistance());
             //fw.flush();
             fw.close();
         } catch (IOException e) {
@@ -202,8 +202,29 @@ public class AStar {
         }
     }
 
-    public void findLeftPath(Graph<RoadNode, RoadSegmentEdge> graph){
-
+    /*
+     * 将剩余的路径添加到文件中
+     * @param graph
+     * @param start
+     * @param target
+     * @param clock
+     * @return void
+     */
+    public void findLeftPath(Graph<RoadNode, RoadSegmentEdge> graph,RoadNode start,RoadNode target,ClockSimulator clock){
+        Path path= Dijkstra.singlePath(graph,start,target,clock);
+        try {
+            FileWriter fw=new FileWriter("experimentData/testPath.txt",true);
+            while (path.isEmpty()){
+                PathSegment pathSegment=path.pollPathSegment();
+                RoadNode roadNode=pathSegment.getEndNode();
+                fw.write(roadNode.getOsmId()+":"+roadNode.getLon()+":"+roadNode.getLat()+"\n");
+            }
+            clock.addmsec(path.getDistance());
+            //fw.flush();
+            fw.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
 

@@ -1,11 +1,13 @@
 package xmu.mocom.astar;
 
+import xmu.mocom.simulator.SimClock;
+
 /**
  * @Author: Chengyu Sun
  * @Description:
  * @Date: Created in 2019/6/27 9:12
  */
-public class ClockSimulator {
+public class ClockSimulator extends SimClock {
 
 
     private long origin;
@@ -24,17 +26,17 @@ public class ClockSimulator {
 //    }
 
     public ClockSimulator(long x){
+        super(x);
         now=origin=x;
     }
 
-//    public void addmsec(long cost){
-//        msec+=cost;
-//        flush();
-//    }
+    public void addmsec(long cost){
+        now+=cost;
+        now=now%86400000;
+    }
 
     public void setNow(long distance){
         now=origin+distance;
-        now=now%86400000;
     }
 
 
@@ -53,7 +55,7 @@ public class ClockSimulator {
 
 
     public int getHour(){
-        return (int)now/3600000;
+        return (int)(now%86400000)/3600000;
     }
 
 //    public String toString(){
@@ -71,6 +73,5 @@ public class ClockSimulator {
         long msec=now%1000;
         return "hour:"+hour+" min:"+min+" sec:"+sec+" msec:"+msec;
     }
-
 
 }
