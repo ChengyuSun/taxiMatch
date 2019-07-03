@@ -168,6 +168,19 @@ public class LoadMap {
 			Graph<RoadNode, RoadSegmentEdge> g = (Graph<RoadNode, RoadSegmentEdge>) in.readObject();
 			in.close();
 			fileIn.close();
+
+			System.out.println("文件读取结束，开始修改内存");
+			loadBelongFile(g);
+			System.out.println("内存修改完毕，重写文件");
+			//将修改后的graph重新存入
+			FileOutputStream fileOut =
+					new FileOutputStream(graphInformation);
+			ObjectOutputStream out = new ObjectOutputStream(fileOut);
+			out.writeObject(g);
+			out.close();
+			fileOut.close();
+
+			System.out.println("文件重写完毕");
 			return g;
 		}
 		else{
@@ -266,7 +279,7 @@ public class LoadMap {
 	 * @param g
 	 * @return void
 	 */
-	public void loadBelongFile(Graph<RoadNode, RoadSegmentEdge> g)throws Exception{
+	public static void loadBelongFile(Graph<RoadNode, RoadSegmentEdge> g)throws Exception{
         BufferedReader bufferedReader=new BufferedReader(new FileReader(belongFile));
         String line="";
         Cluster cluster=new Cluster();
@@ -285,13 +298,13 @@ public class LoadMap {
         }
     }
 
-
 	public static void main(String[] args) throws Exception{
 //		long timeStart=System.currentTimeMillis();
 //		Graph<RoadNode, RoadSegmentEdge> graph=initMap();
 //		long timeEnd=System.currentTimeMillis();
 //		long cost=timeEnd-timeStart;
 //		System.out.println("init cost:"+cost+"ms");
+		LoadMap.initMap();
 	}
 
 }

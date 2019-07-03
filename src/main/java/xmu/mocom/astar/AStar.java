@@ -2,6 +2,9 @@ package xmu.mocom.astar;
 
 import org.dom4j.DocumentException;
 import org.jgrapht.Graph;
+import org.jgrapht.GraphPath;
+import org.jgrapht.alg.shortestpath.DijkstraShortestPath;
+import org.jgrapht.graph.DefaultWeightedEdge;
 import xmu.mocom.coreRouting.CoreEdge;
 import xmu.mocom.coreRouting.CoreNode;
 import xmu.mocom.dijkstra.Dijkstra;
@@ -22,6 +25,9 @@ import java.util.*;
 public class AStar {
 
     public static String GRAPH_FILE = "experimentData/core_choose_nums=4000_core_nums=50_graph.ser";
+    private static String ThirdPath="experimentData/leftPath.txt";
+    private static String FirstPath="experimentData/testPath.txt";
+    private static String CorePath="experimentData/corePath.txt";
     private Set<String> S=new HashSet<String>();
     private List<RoadNode> nextRoadNodes=new ArrayList<>();
     private static double speed=0.0065;
@@ -31,13 +37,32 @@ public class AStar {
         System.out.println("graphing...");
         Graph<RoadNode, RoadSegmentEdge> graph = LoadMap.getMap(GRAPH_FILE);
 
-        RoadNode n1=GraphUtil.findRoadNodeById(graph,"4012919283");
-        RoadNode n2=GraphUtil.findRoadNodeById(graph,"1223212190");
+        /*  test 1  效果奇差
+         * # 起点 (118.1496317, 24.4898824,    4012919283
+            # 终点 (118.07227, 24.4578902,     1223212190
+            # startCore  118.0881711,24.4828203
+            # TargetCore 118.0717192, 24.4625586
+         */
+
+        /*test2  效果较好
+        start: 118.192591, 24.4865512  1422597009
+        target: 118.126015, 24.5356673  1422693845
+
+        startCore: 118.1917327,24.4847002
+        targetCore: 118.1298394,24.5329152
+         */
+
+        RoadNode n1=GraphUtil.findRoadNodeById(graph,"1422597009");
+        RoadNode n2=GraphUtil.findRoadNodeById(graph,"1422693845");
 
         AStar aStar=new AStar();
         ClockSimulator clock=new ClockSimulator(100000);
 
-        RoadNode end=aStar.expandToCore(graph,n1,n2,clock);
+        System.out.println("start: "+n1.getLon()+", "+n1.getLat());
+        System.out.println("target: "+n2.getLon()+", "+n2.getLat());
+
+        aStar.astarExpand(graph,n1,n2,clock);
+        //aStar.findLeftPath(graph,n1,n2,clock);
 
     }
 
@@ -98,34 +123,34 @@ public class AStar {
      * @param null
      * @return
      */
-
-    public RoadNode expandToCore(Graph<RoadNode, RoadSegmentEdge> graph,RoadNode start,RoadNode target,ClockSimulator clock){
+    public void astarExpand(Graph<RoadNode, RoadSegmentEdge> graph,RoadNode start,RoadNode target,ClockSimulator clock){
 
         start.getDijkstraNode().setParentNode(null);
         start.getDijkstraNode().setDistance(0);
 
-        if(start.getOsmId()==target.getOsmId()||start.isCore()){
-            return start;
+        if(start.getOsmId()==target.getOsmId()){
+            return;
+        }
+
+        if(start.isCore()){
+            coreToTarget(graph,start,target,clock);
+            return;
         }
 
         findNextRoadNodes(graph,start,target,clock);
-
         RoadNode oldStart=start;
         RoadNode newStart=getTopFromNextRoadNodes();
 
         BufferedWriter out = null;
         try {
-            out = new BufferedWriter(new OutputStreamWriter(new FileOutputStream("experimentData/testPath.txt")));
+            out = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(FirstPath)));
             while (!newStart.isCore()&&!newStart.getOsmId().equals(target.getOsmId())){
                 //将节点存储于文件中
                 out.write(newStart.getOsmId()+":"+newStart.getLon()+":"+newStart.getLat()+"\n");
-                System.out.println("到达节点:"+newStart.getOsmId());
                 S.add(newStart.getOsmId());//避免之后重复该节点
                 RoadSegmentEdge choosenEdge=graph.getEdge(oldStart,newStart);//找到对应边
 
-
                 clock.setNow(newStart.getDijkstraNode().getDistance());//时钟重置时间
-                System.out.println("现在时间为: "+clock);
 
                 findNextRoadNodes(graph,newStart,target,clock);//找到新起点的所有下一个节点
 
@@ -138,15 +163,11 @@ public class AStar {
             e.printStackTrace();
         }
         if(newStart.isCore()){
-            System.out.println("找到core节点");
-            RoadNode targetCore=target.getBelongTo();
-            findCorePath(newStart.getCoreNode(),targetCore.getCoreNode(),clock);
+            System.out.println("拓展到core节点");
+            coreToTarget(graph,newStart,target,clock);
+            return;
         }
-        else{
-            System.out.println("找到终点");
-        }
-
-        return newStart;
+        System.out.println("直接拓展到终点");
     }
 
 
@@ -155,7 +176,7 @@ public class AStar {
      * @param
      * @return xmu.mocom.roadNet.RoadNode
      */
-    public RoadNode getTopFromNextRoadNodes(){
+    private RoadNode getTopFromNextRoadNodes(){
         for(RoadNode roadNode:nextRoadNodes){
             if(!S.contains(roadNode.getOsmId())){
                 return roadNode;
@@ -171,10 +192,8 @@ public class AStar {
      * @param coreTarget
      * @return void
      */
-    public void findCorePath(CoreNode coreStart,CoreNode coreTarget,ClockSimulator clock){
+    private void findCorePath(CoreNode coreStart,CoreNode coreTarget,ClockSimulator clock){
         CoreEdge coreEdge=null;
-        System.out.println(coreStart.getEdgeSet().size());
-        System.out.println(coreTarget.getEdgeSet().size());
         for(CoreEdge c:coreStart.getEdgeSet()){
             if(c.isStartNode(coreStart)&&c.isTargetNode(coreTarget)){
                 coreEdge=c;
@@ -185,11 +204,60 @@ public class AStar {
             System.out.println("未找到对应CoreEdge");
             return;
         }
+
         FileWriter fw=null;
         try {
-            fw=new FileWriter("experimentData/testPath.txt",true);
+            fw=new FileWriter(CorePath);
             Path path=coreEdge.getTimeDependentPathList().get(clock.getHour());
-            while (path.isEmpty()){
+            while (!path.isEmpty()){
+                PathSegment pathSegment=path.pollPathSegment();
+                RoadNode roadNode=pathSegment.getEndNode();
+                fw.write(roadNode.getOsmId()+":"+roadNode.getLon()+":"+roadNode.getLat()+"\n");
+            }
+            clock.addmsec(path.getDistance());
+            //fw.flush();
+            fw.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+//    public void findCorePath2(RoadNode n1,RoadNode n2,Graph<RoadNode, RoadSegmentEdge> graph){
+//
+//        DijkstraShortestPath<RoadNode, DefaultWeightedEdge> dijkstraAlg = new DijkstraShortestPath(graph);
+//        GraphPath<RoadNode,DefaultWeightedEdge> thepath = dijkstraAlg.getPath(n1, n2);
+//        //System.out.println("path:="+thepath);
+//        Iterator it = thepath.getVertexList().iterator();
+//        FileWriter fw=null;
+//
+//        try {
+//            fw=new FileWriter("experimentData/corePath.txt");
+//            while(it.hasNext()) {
+//                RoadNode roadNode = (RoadNode) it.next();
+//                fw.write(roadNode.getOsmId()+":"+roadNode.getLon()+":"+roadNode.getLat()+"\n");
+//            }
+//            //fw.flush();
+//            fw.close();
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//        }
+//    }
+
+    /*
+     * 将剩余的路径添加到文件中
+     * @param graph
+     * @param start
+     * @param target
+     * @param clock
+     * @return void
+     */
+    private void findLeftPath(Graph<RoadNode, RoadSegmentEdge> graph,RoadNode start,RoadNode target,ClockSimulator clock){
+        Path path= Dijkstra.singlePath(graph,start,target,clock);
+        System.out.println("leftStart: "+start.getLon()+","+start.getLat());
+        System.out.println("leftTarget: "+target.getLon()+","+target.getLat());
+        try {
+            FileWriter fw=new FileWriter(ThirdPath);
+            while (!path.isEmpty()){
                 PathSegment pathSegment=path.pollPathSegment();
                 RoadNode roadNode=pathSegment.getEndNode();
                 fw.write(roadNode.getOsmId()+":"+roadNode.getLon()+":"+roadNode.getLat()+"\n");
@@ -203,29 +271,19 @@ public class AStar {
     }
 
     /*
-     * 将剩余的路径添加到文件中
+     * 后两个步骤
      * @param graph
-     * @param start
+     * @param core
      * @param target
      * @param clock
      * @return void
      */
-    public void findLeftPath(Graph<RoadNode, RoadSegmentEdge> graph,RoadNode start,RoadNode target,ClockSimulator clock){
-        Path path= Dijkstra.singlePath(graph,start,target,clock);
-        try {
-            FileWriter fw=new FileWriter("experimentData/testPath.txt",true);
-            while (path.isEmpty()){
-                PathSegment pathSegment=path.pollPathSegment();
-                RoadNode roadNode=pathSegment.getEndNode();
-                fw.write(roadNode.getOsmId()+":"+roadNode.getLon()+":"+roadNode.getLat()+"\n");
-            }
-            clock.addmsec(path.getDistance());
-            //fw.flush();
-            fw.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+    private void coreToTarget(Graph<RoadNode, RoadSegmentEdge> graph,RoadNode core,RoadNode target,ClockSimulator clock){
+        RoadNode targetCore=target.getBelongTo();
+        System.out.println("startCore: "+core.getLon()+","+core.getLat());
+        System.out.println("targetCore: "+targetCore.getLon()+","+targetCore.getLat());
+        findCorePath(core.getCoreNode(),targetCore.getCoreNode(),clock);
+        findLeftPath(graph,targetCore,target,clock);
     }
-
 
 }
