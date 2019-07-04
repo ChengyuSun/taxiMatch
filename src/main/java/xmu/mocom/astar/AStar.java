@@ -52,11 +52,25 @@ public class AStar {
         targetCore: 118.1298394,24.5329152
          */
 
-        RoadNode n1=GraphUtil.findRoadNodeById(graph,"1422597009");
-        RoadNode n2=GraphUtil.findRoadNodeById(graph,"1422693845");
+        /*test3  结果奇差
+        start: 118.1494332, 24.4901656  4012919276
+        target: 118.1361622, 24.4721757  2815371666
+        startCore: 118.1464654,24.4914873
+        targetCore: 118.1439876,24.4794368
+         */
+
+        /* test4  结果很好
+        start: 118.0888667, 24.4423123
+        target: 118.1603893, 24.4883155
+        startCore: 118.0886226,24.4396882
+        targetCore: 118.1572804,24.4853667
+         */
+
+        RoadNode n1=GraphUtil.findRoadNodeById(graph,"1641610591");
+        RoadNode n2=GraphUtil.findRoadNodeById(graph,"4012910293");
 
         AStar aStar=new AStar();
-        ClockSimulator clock=new ClockSimulator(100000);
+        ClockSimulator clock=new ClockSimulator(1000000);
 
         System.out.println("start: "+n1.getLon()+", "+n1.getLat());
         System.out.println("target: "+n2.getLon()+", "+n2.getLat());
@@ -124,43 +138,29 @@ public class AStar {
      * @return
      */
     public void astarExpand(Graph<RoadNode, RoadSegmentEdge> graph,RoadNode start,RoadNode target,ClockSimulator clock){
-
-        start.getDijkstraNode().setParentNode(null);
+        start.getDijkstraNode().setParentNode(null);//把起点初始化
         start.getDijkstraNode().setDistance(0);
 
+        //起点就是终点
         if(start.getOsmId()==target.getOsmId()){
             return;
         }
-
+        //起点就是core节点
         if(start.isCore()){
             coreToTarget(graph,start,target,clock);
             return;
         }
-
         findNextRoadNodes(graph,start,target,clock);
-        RoadNode oldStart=start;
         RoadNode newStart=getTopFromNextRoadNodes();
 
-        BufferedWriter out = null;
-        try {
-            out = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(FirstPath)));
-            while (!newStart.isCore()&&!newStart.getOsmId().equals(target.getOsmId())){
-                //将节点存储于文件中
-                out.write(newStart.getOsmId()+":"+newStart.getLon()+":"+newStart.getLat()+"\n");
-                S.add(newStart.getOsmId());//避免之后重复该节点
-                RoadSegmentEdge choosenEdge=graph.getEdge(oldStart,newStart);//找到对应边
-
-                clock.setNow(newStart.getDijkstraNode().getDistance());//时钟重置时间
-
-                findNextRoadNodes(graph,newStart,target,clock);//找到新起点的所有下一个节点
-
-                oldStart=newStart;
-                newStart=getTopFromNextRoadNodes();
-            }
-            out.flush();
-            out.close();
-        } catch (Exception e) {
-            e.printStackTrace();
+        FileUtil.cleanFile(FirstPath);
+        while (!newStart.isCore()&&!newStart.getOsmId().equals(target.getOsmId())){
+            //将节点存储于文件中
+            FileUtil.record(newStart,FirstPath,true);
+            S.add(newStart.getOsmId());//避免之后重复该节点
+            clock.setNow(newStart.getDijkstraNode().getDistance());//时钟重置时间
+            findNextRoadNodes(graph,newStart,target,clock);//找到新起点的所有下一个节点
+            newStart=getTopFromNextRoadNodes();
         }
         if(newStart.isCore()){
             System.out.println("拓展到core节点");
@@ -169,7 +169,6 @@ public class AStar {
         }
         System.out.println("直接拓展到终点");
     }
-
 
     /*
      * 选择下一个节点
@@ -184,7 +183,6 @@ public class AStar {
         }
         return null;
     }
-
 
     /*
      * 找到core节点路径并保存在原来的文件中
@@ -205,21 +203,9 @@ public class AStar {
             return;
         }
 
-        FileWriter fw=null;
-        try {
-            fw=new FileWriter(CorePath);
-            Path path=coreEdge.getTimeDependentPathList().get(clock.getHour());
-            while (!path.isEmpty()){
-                PathSegment pathSegment=path.pollPathSegment();
-                RoadNode roadNode=pathSegment.getEndNode();
-                fw.write(roadNode.getOsmId()+":"+roadNode.getLon()+":"+roadNode.getLat()+"\n");
-            }
-            clock.addmsec(path.getDistance());
-            //fw.flush();
-            fw.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        Path path=coreEdge.getTimeDependentPathList().get(clock.getHour());
+        FileUtil.record(path,CorePath,false);
+        clock.addmsec(path.getDistance());
     }
 
 //    public void findCorePath2(RoadNode n1,RoadNode n2,Graph<RoadNode, RoadSegmentEdge> graph){
@@ -253,21 +239,11 @@ public class AStar {
      */
     private void findLeftPath(Graph<RoadNode, RoadSegmentEdge> graph,RoadNode start,RoadNode target,ClockSimulator clock){
         Path path= Dijkstra.singlePath(graph,start,target,clock);
-        System.out.println("leftStart: "+start.getLon()+","+start.getLat());
-        System.out.println("leftTarget: "+target.getLon()+","+target.getLat());
-        try {
-            FileWriter fw=new FileWriter(ThirdPath);
-            while (!path.isEmpty()){
-                PathSegment pathSegment=path.pollPathSegment();
-                RoadNode roadNode=pathSegment.getEndNode();
-                fw.write(roadNode.getOsmId()+":"+roadNode.getLon()+":"+roadNode.getLat()+"\n");
-            }
-            clock.addmsec(path.getDistance());
-            //fw.flush();
-            fw.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        System.out.println("leftStart: "+start.getLon()+", "+start.getLat());
+        System.out.println("leftTarget: "+target.getLon()+", "+target.getLat());
+
+        FileUtil.record(path,ThirdPath,false);
+        clock.addmsec(path.getDistance());
     }
 
     /*
@@ -285,5 +261,7 @@ public class AStar {
         findCorePath(core.getCoreNode(),targetCore.getCoreNode(),clock);
         findLeftPath(graph,targetCore,target,clock);
     }
+
+
 
 }
