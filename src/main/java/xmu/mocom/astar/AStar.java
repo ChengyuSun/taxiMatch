@@ -66,8 +66,8 @@ public class AStar {
         targetCore: 118.1572804,24.4853667
          */
 
-        RoadNode n1=GraphUtil.findRoadNodeById(graph,"1641610591");
-        RoadNode n2=GraphUtil.findRoadNodeById(graph,"4012910293");
+        RoadNode n1=GraphUtil.findRoadNodeById(graph,"4012919283");
+        RoadNode n2=GraphUtil.findRoadNodeById(graph,"1223212190");
 
         AStar aStar=new AStar();
         ClockSimulator clock=new ClockSimulator(1000000);
@@ -91,10 +91,21 @@ public class AStar {
         for(RoadSegmentEdge edge:start.getAllNextEdge(graph)){  //对于当前节点连接的所有边
             if(graph.getEdgeSource(edge).getOsmId().equals(start.getOsmId())){  //选择以当前节点为起点的边
                 RoadNode edgeTarget=graph.getEdgeTarget(edge);//当前边的终点
-                edgeTarget.getDijkstraNode().setDistance(
-                        start.getDijkstraNode().getDistance()+edge.getDistanceList().get(clock.getHour())
-                );
+                if(S.contains(edgeTarget.getOsmId())){
+                    continue;
+                }
+                long distance=start.getDijkstraNode().getDistance()+edge.getDistanceList().get(clock.getHour());
+                //预计到达时间
+                if(nextRoadNodes.contains(edgeTarget)){
+                    if(distance< edgeTarget.getDijkstraNode().getDistance()){
+                        nextRoadNodes.remove(edgeTarget);//删去旧的
+                    }
+                    else {
+                        continue;
+                    }
+                }
                 edgeTarget.getDijkstraNode().setParentNode(start);//保存父节点信息
+                edgeTarget.getDijkstraNode().setDistance(distance);
                 AstarEstimate(target,edgeTarget);
                 nextRoadNodes.add(edgeTarget);
             }
@@ -138,32 +149,38 @@ public class AStar {
      * @return
      */
     public void astarExpand(Graph<RoadNode, RoadSegmentEdge> graph,RoadNode start,RoadNode target,ClockSimulator clock){
+        Path path=new Path();
         start.getDijkstraNode().setParentNode(null);//把起点初始化
         start.getDijkstraNode().setDistance(0);
 
         //起点就是终点
         if(start.getOsmId()==target.getOsmId()){
-            return;
+            return ;
         }
         //起点就是core节点
         if(start.isCore()){
             coreToTarget(graph,start,target,clock);
-            return;
+            return ;
         }
-        findNextRoadNodes(graph,start,target,clock);
-        RoadNode newStart=getTopFromNextRoadNodes();
 
-        FileUtil.cleanFile(FirstPath);
-        while (!newStart.isCore()&&!newStart.getOsmId().equals(target.getOsmId())){
+        findNextRoadNodes(graph,start,target,clock);
+        String newStartId=getTopFromNextRoadNodes().getOsmId();
+        S.add(start.getOsmId());
+        RoadNode newStart=GraphUtil.findRoadNodeById(graph,newStartId);
+
+        while (!newStart.isCore()&&!newStartId.equals(target.getOsmId())){
             //将节点存储于文件中
-            FileUtil.record(newStart,FirstPath,true);
-            S.add(newStart.getOsmId());//避免之后重复该节点
+            S.add(newStartId);//避免之后重复该节点
             clock.setNow(newStart.getDijkstraNode().getDistance());//时钟重置时间
             findNextRoadNodes(graph,newStart,target,clock);//找到新起点的所有下一个节点
-            newStart=getTopFromNextRoadNodes();
+            newStartId=getTopFromNextRoadNodes().getOsmId();
+            newStart=GraphUtil.findRoadNodeById(graph,newStartId);
         }
+
+        path=findPathFromTail(newStart);
+        FileUtil.record(path,FirstPath,false);
+
         if(newStart.isCore()){
-            System.out.println("拓展到core节点");
             coreToTarget(graph,newStart,target,clock);
             return;
         }
@@ -176,12 +193,7 @@ public class AStar {
      * @return xmu.mocom.roadNet.RoadNode
      */
     private RoadNode getTopFromNextRoadNodes(){
-        for(RoadNode roadNode:nextRoadNodes){
-            if(!S.contains(roadNode.getOsmId())){
-                return roadNode;
-            }
-        }
-        return null;
+        return nextRoadNodes.remove(0);
     }
 
     /*
@@ -208,26 +220,7 @@ public class AStar {
         clock.addmsec(path.getDistance());
     }
 
-//    public void findCorePath2(RoadNode n1,RoadNode n2,Graph<RoadNode, RoadSegmentEdge> graph){
-//
-//        DijkstraShortestPath<RoadNode, DefaultWeightedEdge> dijkstraAlg = new DijkstraShortestPath(graph);
-//        GraphPath<RoadNode,DefaultWeightedEdge> thepath = dijkstraAlg.getPath(n1, n2);
-//        //System.out.println("path:="+thepath);
-//        Iterator it = thepath.getVertexList().iterator();
-//        FileWriter fw=null;
-//
-//        try {
-//            fw=new FileWriter("experimentData/corePath.txt");
-//            while(it.hasNext()) {
-//                RoadNode roadNode = (RoadNode) it.next();
-//                fw.write(roadNode.getOsmId()+":"+roadNode.getLon()+":"+roadNode.getLat()+"\n");
-//            }
-//            //fw.flush();
-//            fw.close();
-//        } catch (IOException e) {
-//            e.printStackTrace();
-//        }
-//    }
+
 
     /*
      * 将剩余的路径添加到文件中
@@ -256,12 +249,63 @@ public class AStar {
      */
     private void coreToTarget(Graph<RoadNode, RoadSegmentEdge> graph,RoadNode core,RoadNode target,ClockSimulator clock){
         RoadNode targetCore=target.getBelongTo();
-        System.out.println("startCore: "+core.getLon()+","+core.getLat());
-        System.out.println("targetCore: "+targetCore.getLon()+","+targetCore.getLat());
+        System.out.println("startCore: "+core.getLon()+", "+core.getLat());
+        System.out.println("targetCore: "+targetCore.getLon()+", "+targetCore.getLat());
         findCorePath(core.getCoreNode(),targetCore.getCoreNode(),clock);
         findLeftPath(graph,targetCore,target,clock);
     }
 
+
+    /*
+     * 通用Astar
+     * @param graph
+     * @param start
+     * @param target
+     * @param clock
+     * @return xmu.mocom.roadNet.Path
+     */
+    public Path AstarRegular(Graph<RoadNode, RoadSegmentEdge> graph,RoadNode start,RoadNode target,ClockSimulator clock){
+        Path path=new Path();
+        if(start.getOsmId().equals(target.getOsmId())){
+            path.addPathSegmentFirst(new PathSegment(start,target,0));
+            return path;
+        }
+
+        start.getDijkstraNode().setParentNode(null);//把起点初始化
+        start.getDijkstraNode().setDistance(0);
+        S.add(start.getOsmId());
+
+        findNextRoadNodes(graph,start,target,clock);
+        String newStartId=getTopFromNextRoadNodes().getOsmId();
+        RoadNode newStart=GraphUtil.findRoadNodeById(graph,newStartId);
+
+        while (!newStartId.equals(target.getOsmId())){
+            S.add(newStartId);//避免之后重复该节点
+            clock.setNow(newStart.getDijkstraNode().getDistance());//时钟重置时间
+            findNextRoadNodes(graph,newStart,target,clock);//找到新起点的所有下一个节点
+            newStartId=getTopFromNextRoadNodes().getOsmId();
+            newStart=GraphUtil.findRoadNodeById(graph,newStartId);
+        }
+        path=findPathFromTail(target);
+        return path;
+    }
+
+    /*
+     * 从尾部还原路径
+     * @param tail
+     * @return xmu.mocom.roadNet.Path
+     */
+    public Path findPathFromTail(RoadNode tail){
+        Path path=new Path();
+        while (tail.getDijkstraNode().getParentNode()!=null){
+            RoadNode parent=tail.getDijkstraNode().getParentNode();
+            path.addPathSegmentFirst(new PathSegment(
+                    tail,parent, tail.getDijkstraNode().getDistance()-parent.getDijkstraNode().getDistance()
+            ));
+            tail=parent;
+        }
+        return path;
+    }
 
 
 }

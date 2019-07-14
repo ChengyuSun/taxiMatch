@@ -32,7 +32,7 @@ public class ClockSimulator extends SimClock {
 
     public void addmsec(long cost){
         now+=cost;
-        now=now%86400000;
+        //now=now%86400000;
     }
 
     public void setNow(long distance){
