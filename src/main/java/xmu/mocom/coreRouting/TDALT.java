@@ -35,7 +35,7 @@ public class TDALT {
 	}
 	
 	/*
-	 * AStar forward Search
+	 * AStar forward SearchNode
 	 * 
 	 * @param g
 	 * @param dijkstraData
@@ -67,7 +67,7 @@ public class TDALT {
 	}
 	
 	/*
-	 * AStar backward Search
+	 * AStar backward SearchNode
 	 * 
 	 * @param g
 	 * @param dijkstraData
