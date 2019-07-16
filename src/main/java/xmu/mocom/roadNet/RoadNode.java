@@ -20,13 +20,13 @@ public class RoadNode implements Serializable {
     private double lon;        //经度
     private double lat;        //纬度
     private boolean coreFlag;
-    private DijkstraNode dijkstraNode;
+   // private DijkstraNode dijkstraNode;
     private CoreNode coreNode;
     private RoadNode belongTo;//从属于哪个core节点
 
     public RoadNode() {
         coreFlag = false;
-        dijkstraNode = null;
+        //dijkstraNode = null;
         coreNode = null;
     }
 
@@ -41,7 +41,7 @@ public class RoadNode implements Serializable {
                 this.lat = Double.parseDouble(attribute.getValue());
         }
         coreFlag = false;
-        dijkstraNode = null;
+        //dijkstraNode = null;
         coreNode = null;
     }
 
@@ -78,13 +78,13 @@ public class RoadNode implements Serializable {
         return this.coreFlag;
     }
 
-    public void setDijkstraNode(DijkstraNode node) {
-        this.dijkstraNode = node;
-    }
-
-    public DijkstraNode getDijkstraNode() {
-        return this.dijkstraNode;
-    }
+//    public void setDijkstraNode(DijkstraNode node) {
+//        this.dijkstraNode = node;
+//    }
+//
+//    public DijkstraNode getDijkstraNode() {
+//        return this.dijkstraNode;
+//    }
 
     public Set<RoadSegmentEdge> getAllNextEdge(Graph<RoadNode, RoadSegmentEdge> g) {
         Set<RoadSegmentEdge> edgeSet = g.edgesOf(this);

@@ -44,6 +44,11 @@ public class Path implements Serializable {
 	public void addDistance(long distance){
 		this.distance += distance;
 	}
+
+	public void addPathSegmentLast(PathSegment pathSegment){
+		segmentList.addLast(pathSegment);
+		this.distance+=pathSegment.getDistance();
+	}
 }
 
 

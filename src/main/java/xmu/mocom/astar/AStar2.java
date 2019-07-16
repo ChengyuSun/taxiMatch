@@ -1,15 +1,20 @@
 package xmu.mocom.astar;
 
+import org.dom4j.DocumentException;
 import org.jgrapht.Graph;
 import xmu.mocom.coreRouting.CoreEdge;
 import xmu.mocom.coreRouting.CoreNode;
 import xmu.mocom.dijkstra.Dijkstra;
+import xmu.mocom.experiment.LoadMap;
 import xmu.mocom.roadNet.Path;
 import xmu.mocom.roadNet.PathSegment;
 import xmu.mocom.roadNet.RoadNode;
 import xmu.mocom.roadNet.RoadSegmentEdge;
 
+import java.io.IOException;
 import java.util.*;
+
+import static xmu.mocom.astar.AStar.GRAPH_FILE;
 
 /**
  * @Author: Chengyu Sun
@@ -26,7 +31,27 @@ public class AStar2 {
     private static String Path1="experimentData/path1.txt";
     private static String Path2="experimentData/path2.txt";
     private static String Path3="experimentData/path3.txt";
+    private static String Path4="experimentData/path4.txt";
 
+    public static void main(String[] args)throws IOException, DocumentException, java.lang.Exception{
+
+        System.out.println("graphing...");
+        Graph<RoadNode, RoadSegmentEdge> graph = LoadMap.getMap(GRAPH_FILE);
+
+        RoadNode n1=GraphUtil.findRoadNodeById(graph,"4012919283");
+        RoadNode n2=GraphUtil.findRoadNodeById(graph,"1223212190");
+
+        AStar2 aStar2=new AStar2();
+        ClockSimulator clock=new ClockSimulator(1000000);
+
+        System.out.println("start: "+n1.getLon()+", "+n1.getLat());
+        System.out.println("target: "+n2.getLon()+", "+n2.getLat());
+
+        //aStar2.astarExpand(graph,n1,n2,clock);
+        Path path=aStar2.astarPath(graph,n1,n2,clock,true);
+        FileUtil.record(path,Path4,false);
+
+    }
     /*
      * 找到当前节点通往的所有节点，并为这些节点赋予对应时间、距离等信息,最后进行A*优先级排序
      * @param graph
@@ -35,10 +60,9 @@ public class AStar2 {
      */
     public void findNextRoadNodes
     (Graph<RoadNode, RoadSegmentEdge> graph, RoadNode start, RoadNode target, ClockSimulator clock){
-        for(RoadSegmentEdge edge:start.getAllNextEdge(graph)){  //对于当前节点连接的所有边
-            if(graph.getEdgeSource(edge).getOsmId().equals(start.getOsmId())){  //选择以当前节点为起点的边
+        for(RoadSegmentEdge edge:start.getAllNextEdge(graph)){  //对于当前起点连接的所有边（双向边）
+            if(graph.getEdgeSource(edge).equals(start)){  //选择以当前节点为起点的边（单向边）
                 RoadNode edgeTarget=graph.getEdgeTarget(edge);
-
 
                 if(allNodes.containsKey(edgeTarget.getOsmId())){
                    if(allNodes.get(edgeTarget.getOsmId()).isSteped()){
@@ -66,7 +90,16 @@ public class AStar2 {
                 nextRoadNodes.add(se);
             }
         }
-        Collections.sort(nextRoadNodes, new Comparator<SearchNode>() {
+        sortList(nextRoadNodes);
+    }
+
+    /*
+     * 将下一步可达节点按照Astar优先级排列
+     * @param list
+     * @return void
+     */
+    private void sortList(List<SearchNode> list){
+        Collections.sort(list, new Comparator<SearchNode>() {
             @Override
             public int compare(SearchNode o1, SearchNode o2) {
                 if(o1.getEstimateF()<o2.getEstimateF()){
@@ -78,7 +111,6 @@ public class AStar2 {
                 return 1;
             }
         });
-
     }
 
 
@@ -99,30 +131,25 @@ public class AStar2 {
     }
 
 
-    /*
-     * 从起点出发，按照Astar算法进行探索
-     * @param null
-     * @return
-     */
-    public void astarExpand(Graph<RoadNode, RoadSegmentEdge> graph,RoadNode start,RoadNode target,ClockSimulator clock){
+   /*
+    * 功能描述
+    * @param graph
+    * @param start
+    * @param target
+    * @param clock
+    * @param isToCore   可选择拓展到core/target
+    * @return xmu.mocom.roadNet.Path
+    */
+    public Path astarPath
+    (Graph<RoadNode, RoadSegmentEdge> graph,RoadNode start,RoadNode target,ClockSimulator clock,boolean isToCore){
+        SearchNode newStart=new SearchNode(start);
+        allNodes.put(start.getOsmId(),newStart);
+        newStart.setDistance(0);
 
-        //起点就是终点
-        if(start.getOsmId()==target.getOsmId()){
-            return ;
-        }
-        //起点就是core节点
-        if(start.isCore()){
-            coreToTarget(graph,start,target,clock);
-            return ;
-        }
-
-        SearchNode startSearchNode=new SearchNode(start);
-        allNodes.put(start.getOsmId(),startSearchNode);
-        startSearchNode.setSteped(true);
-        findNextRoadNodes(graph,start,target,clock);
-        SearchNode newStart=getTopFromNextRoadNodes();
-
-        while (!newStart.getRoadNode().isCore()&&!newStart.getRoadNode().equals(target)){
+        while (!newStart.getRoadNode().equals(target)){
+            if(isToCore&&newStart.getRoadNode().isCore()){
+                break;
+            }
             newStart.setSteped(true);
             clock.setNow(newStart.getDistance());//时钟重置时间
             findNextRoadNodes(graph,newStart.getRoadNode(),target,clock);//找到新起点的所有下一个节点
@@ -130,13 +157,16 @@ public class AStar2 {
         }
 
         Path path=findPathFromTail(newStart);
-        FileUtil.record(path,Path1,false);
 
-        if(newStart.getRoadNode().isCore()){
-            coreToTarget(graph,newStart.getRoadNode(),target,clock);
-            return;
+        if(newStart.getRoadNode().equals(target)){
+            System.out.println("直接拓展到终点");
         }
-        System.out.println("直接拓展到终点");
+        else {
+            System.out.println("拓展到core节点");
+            addPath(path,findCorePath(newStart.getRoadNode().getCoreNode(),target.getBelongTo().getCoreNode(),clock));
+            addPath(path,astarPath(graph,target.getBelongTo(),target,clock,false));
+        }
+        return path;
     }
 
     /*
@@ -154,7 +184,7 @@ public class AStar2 {
      * @param coreTarget
      * @return void
      */
-    private void findCorePath(CoreNode coreStart, CoreNode coreTarget, ClockSimulator clock){
+    private Path findCorePath(CoreNode coreStart, CoreNode coreTarget, ClockSimulator clock){
         CoreEdge coreEdge=null;
         for(CoreEdge c:coreStart.getEdgeSet()){
             if(c.isStartNode(coreStart)&&c.isTargetNode(coreTarget)){
@@ -164,12 +194,12 @@ public class AStar2 {
         }
         if(coreEdge==null){
             System.out.println("未找到对应CoreEdge");
-            return;
+            return  null;
         }
 
         Path path=coreEdge.getTimeDependentPathList().get(clock.getHour());
-        FileUtil.record(path,Path2,false);
         clock.addmsec(path.getDistance());
+        return path;
     }
 
 
@@ -199,44 +229,11 @@ public class AStar2 {
      * @param clock
      * @return void
      */
-    private void coreToTarget(Graph<RoadNode, RoadSegmentEdge> graph,RoadNode core,RoadNode target,ClockSimulator clock){
+    private void coreToCore(Graph<RoadNode, RoadSegmentEdge> graph,RoadNode core,RoadNode target,ClockSimulator clock){
         RoadNode targetCore=target.getBelongTo();
         System.out.println("startCore: "+core.getLon()+", "+core.getLat());
         System.out.println("targetCore: "+targetCore.getLon()+", "+targetCore.getLat());
         findCorePath(core.getCoreNode(),targetCore.getCoreNode(),clock);
-        findLeftPath(graph,targetCore,target,clock);
-    }
-
-
-    /*
-     * 通用Astar
-     * @param graph
-     * @param start
-     * @param target
-     * @param clock
-     * @return xmu.mocom.roadNet.Path
-     */
-    public Path AstarRegular(Graph<RoadNode, RoadSegmentEdge> graph,RoadNode start,RoadNode target,ClockSimulator clock){
-        Path path=new Path();
-        if(start.getOsmId().equals(target.getOsmId())){
-            path.addPathSegmentFirst(new PathSegment(start,target,0));
-            return path;
-        }
-
-
-        SearchNode statSearchNode=new SearchNode(start);
-        statSearchNode.setSteped(true);
-        findNextRoadNodes(graph,start,target,clock);
-        SearchNode newStart=getTopFromNextRoadNodes();
-
-        while (!newStart.getRoadNode().equals(target)){
-            newStart.setSteped(true);
-            clock.setNow(newStart.getDistance());//时钟重置时间
-            findNextRoadNodes(graph,newStart.getRoadNode(),target,clock);//找到新起点的所有下一个节点
-            newStart=getTopFromNextRoadNodes();
-        }
-        path=findPathFromTail(newStart);
-        return path;
     }
 
     /*
@@ -256,4 +253,16 @@ public class AStar2 {
         return path;
     }
 
+    /*
+     * 将两条path合并
+     * @param p1
+     * @param p2
+     * @return void
+     */
+    public void addPath(Path p1,Path p2){
+        while (!p2.isEmpty()){
+            PathSegment pathSegment=p2.pollPathSegment();
+            p1.addPathSegmentLast(pathSegment);
+        }
+    }
 }
