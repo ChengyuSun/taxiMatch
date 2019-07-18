@@ -38,8 +38,8 @@ public class AStar2 {
         System.out.println("graphing...");
         Graph<RoadNode, RoadSegmentEdge> graph = LoadMap.getMap(GRAPH_FILE);
 
-        RoadNode n1=GraphUtil.findRoadNodeById(graph,"4012919283");
-        RoadNode n2=GraphUtil.findRoadNodeById(graph,"1223212190");
+        RoadNode n1=GraphUtil.findRoadNodeById(graph,"2791910141");
+        RoadNode n2=GraphUtil.findRoadNodeById(graph,"1408154683");
 
         AStar2 aStar2=new AStar2();
         ClockSimulator clock=new ClockSimulator(1000000);
@@ -48,7 +48,7 @@ public class AStar2 {
         System.out.println("target: "+n2.getLon()+", "+n2.getLat());
 
         //aStar2.astarExpand(graph,n1,n2,clock);
-        Path path=aStar2.astarPath(graph,n1,n2,clock,true);
+        Path path=aStar2.astarPath(graph,n1,n2,clock,false);
         FileUtil.record(path,Path4,false);
 
     }
@@ -63,9 +63,11 @@ public class AStar2 {
         for(RoadSegmentEdge edge:start.getAllNextEdge(graph)){  //对于当前起点连接的所有边（双向边）
             if(graph.getEdgeSource(edge).equals(start)){  //选择以当前节点为起点的边（单向边）
                 RoadNode edgeTarget=graph.getEdgeTarget(edge);
+                System.out.println("探索到了节点："+edgeTarget.getOsmId());
 
                 if(allNodes.containsKey(edgeTarget.getOsmId())){
                    if(allNodes.get(edgeTarget.getOsmId()).isSteped()){
+                       System.out.println("已经涉足，直接跳过");
                        continue;
                    }
                 }
@@ -150,6 +152,7 @@ public class AStar2 {
             if(isToCore&&newStart.getRoadNode().isCore()){
                 break;
             }
+            System.out.println("到达节点："+newStart.getRoadNode().getOsmId());
             newStart.setSteped(true);
             clock.setNow(newStart.getDistance());//时钟重置时间
             findNextRoadNodes(graph,newStart.getRoadNode(),target,clock);//找到新起点的所有下一个节点
@@ -163,6 +166,7 @@ public class AStar2 {
         }
         else {
             System.out.println("拓展到core节点");
+            System.out.println("startCore: "+newStart.getRoadNode().getLon()+", "+newStart.getRoadNode().getLat());
             addPath(path,findCorePath(newStart.getRoadNode().getCoreNode(),target.getBelongTo().getCoreNode(),clock));
             addPath(path,astarPath(graph,target.getBelongTo(),target,clock,false));
         }

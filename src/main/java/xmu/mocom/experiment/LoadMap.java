@@ -33,7 +33,6 @@ public class LoadMap {
 
     private static String graphInformation="experimentData\\core_choose_nums="+core_choose_nums+"_core_nums="+core_nums+"_graph.ser";
 	private static String corePath="experimentData\\core_choose_nums="+core_choose_nums+"_core_nums="+core_nums+".txt";
-    public static String belongFile="experimentData\\belonging_choose_nums="+core_choose_nums+"_core_nums="+core_nums+".txt";
 
 	//根据osmId找到对应的RoadNode
 	public static RoadNode getRoadNodeById(List<RoadNode> RoadNodes,String id)
@@ -212,6 +211,8 @@ public class LoadMap {
 		}
 		statement.close();
 
+		//加载节点所属信息
+		loadBelongFile(g);
 		System.out.println("Add RoadNodes finished!");
 
 		//将原始图所有的边插入
@@ -280,21 +281,12 @@ public class LoadMap {
 	 * @return void
 	 */
 	public static void loadBelongFile(Graph<RoadNode, RoadSegmentEdge> g)throws Exception{
-        BufferedReader bufferedReader=new BufferedReader(new FileReader(belongFile));
         String line="";
         Cluster cluster=new Cluster();
-        Map<String,String> map=new HashMap<>();
-        while ((line=bufferedReader.readLine())!=null){
-            map.put(line.split(":")[0],line.split(":")[1]);
-        }
+
         for(RoadNode roadNode:g.vertexSet()){
-            if(map.containsKey(roadNode.getOsmId())){
-                roadNode.setBelongTo(g,map.get(roadNode.getOsmId()));
-            }
-            else{
-                RoadNode fakeCore=cluster.findNearCore(roadNode.getOsmId(),g);
-                roadNode.setBelongTo(fakeCore);
-            }
+			RoadNode core=cluster.findNearCore(roadNode.getOsmId(),g);
+			roadNode.setBelongTo(core);
         }
     }
 

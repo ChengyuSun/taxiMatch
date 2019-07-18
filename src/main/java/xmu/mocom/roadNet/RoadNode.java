@@ -20,7 +20,7 @@ public class RoadNode implements Serializable {
     private double lon;        //经度
     private double lat;        //纬度
     private boolean coreFlag;
-   // private DijkstraNode dijkstraNode;
+    //private DijkstraNode dijkstraNode;
     private CoreNode coreNode;
     private RoadNode belongTo;//从属于哪个core节点
 
